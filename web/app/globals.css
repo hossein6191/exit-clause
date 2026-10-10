@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+/* Exit Clause looks like a mail client: a cool grey app frame, white panes with hairline borders,
+   ink text, one postal-red accent, and a rubber stamp on every judged reply. Nothing in the
+   background moves; the only motion is the stamp landing once, and it is skipped for anyone who
+   asks for reduced motion. */
+
+@theme {
+  --color-frame: #eef1f4;
+  --color-frame-deep: #e3e7ec;
+  --color-pane: #ffffff;
+  --color-hover: #f5f7f9;
+  --color-line: #d5dae1;
+  --color-line-soft: #e7eaee;
+  --color-ink: #111827;
+  --color-ink-2: #374151;
+  --color-ink-3: #5b6472;
+  --color-postal: #d7263d;
+  --color-postal-ink: #b21d31;
+  --color-postal-wash: #fcebed;
+  --color-honoured: #138a6e;
+  --color-honoured-ink: #0f6e58;
+  --color-honoured-wash: #e6f4f0;
+  --color-unclear: #b7791f;
+  --color-unclear-ink: #8a5a12;
+  --color-unclear-wash: #fbf2e2;
+  --color-stalled: #a3122a;
+  --color-stalled-wash: #fbe8eb;
+  --color-focus: #1d4ed8;
+
+  --font-sans: var(--font-plex-sans), "Helvetica Neue", Arial, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, Menlo, Consolas, monospace;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-frame);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  ::selection {
+    background: rgba(215, 38, 61, 0.18);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .link {
+    text-decoration: underline;
+    text-decoration-color: var(--color-line);
+    text-underline-offset: 3px;
+  }
+  .link:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .pane {
+    background: var(--color-pane);
+    border: 1px solid var(--color-line);
+  }
+
+  /* A small label in the header of a message: From, To, Sent. */
+  .field-label {
+    color: var(--color-ink-3);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  /* The text inputs of the forms: square-ish, hairline, a clear focus ring. */
+  .field {
+    width: 100%;
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    background: #fff;
+    padding: 7px 10px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--color-ink);
+  }
+  .field:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 0;
+    border-color: var(--color-focus);
+  }
+  .field[aria-invalid="true"] {
+    border-color: var(--color-postal);
+  }
+
+  /* The rubber stamp: double border, mono capitals, rotated, inked over the reply it judges. */
+  .stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 3px double currentColor;
+    border-radius: 5px;
+    padding: 3px 9px 2px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    line-height: 1.25;
+    white-space: nowrap;
+    transform: rotate(-6deg);
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+    pointer-events: none;
+    user-select: none;
+  }
+  .stamp-lg {
+    font-size: 14px;
+    padding: 5px 12px 4px;
+    border-width: 4px;
+  }
+  .stamp-honoured {
+    color: var(--color-honoured-ink);
+  }
+  .stamp-stalled {
+    color: var(--color-stalled);
+  }
+  .stamp-unclear {
+    color: var(--color-unclear-ink);
+  }
+  .stamp-flat {
+    transform: none;
+  }
+  .stamp-in {
+    animation: stamp-in 150ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  }
+}
+
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-6deg) scale(1.7);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-6deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp-in {
+    animation: none;
+  }
+}

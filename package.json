@@ -1,0 +1,14 @@
+{
+  "name": "exit-clause",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Exit Clause: cancel anytime, enforced. The month's fee is held until the month ends, and a provider whose reply stalls a cancellation gives that month back.",
+  "type": "module",
+  "scripts": {
+    "smoke": "node tests/on_chain/smoke.mjs"
+  },
+  "dependencies": {
+    "genlayer-js": "1.1.8",
+    "viem": "2.56.8"
+  }
+}

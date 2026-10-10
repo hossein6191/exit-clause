@@ -1,0 +1,98 @@
+[19:39:57] P 0xE1724BCFab8D9A8C73e23fd78De403b280160DD5  the provider of two plans
+           A 0x69C72bb4de8DAe80417893632530f390724a7b96  member A
+           B 0x538c6c660dBf78F060d8EE5C05BEAF1c246Feb57  member B
+           S 0x2f1aC2D54BF8310D9Ac33C455B8c17121205ADdE  a stranger
+
+[19:39:57] ---- phase A: deploy, and two plans opened
+      [19:40:40] P deploy exit_clause.py  0x71ba225d42a2399aa3c60fa66170b1b5dd5de95278f8266c0a05d8ce753ef27d  3 agree, 0 disagree, 2 idle  SUCCESS  0xc8B97A242cb10c016566572bF8b5BE9b74e81764
+      Exit Clause at 0xc8B97A242cb10c016566572bF8b5BE9b74e81764
+      [19:41:24] P open_plan(Ironside Gym, mont, 500000000000000000, 1800, 1500)  0x3c729802d83dbca9c76cc1060db450aabe9ecc6be852b255ec89433437cc69d6  4 agree, 0 disagree, 1 idle  SUCCESS
+PASS  the provider opens P1, Ironside Gym: 0.5 GEN for a 30-minute period, a 25-minute reply window  - 4 agree, 0 disagree, 1 idle  {"ok": true, "plan": "P1", "provider": "0xe1724bcfab8d9a8c73e23fd78de403b280160dd5", "name": "Ironside Gym, monthly", "f
+      [19:42:03] P open_plan(Northwind Stream, , 300000000000000000, 1800, 300)  0xc5a72eef8c3bb87576b9b5747ca2640db71df483fb0d33f99b4f6ea631295e80  3 agree, 0 disagree, 2 idle  SUCCESS
+PASS  the provider opens P2, Northwind Stream: 0.3 GEN, the same period, a 5-minute reply window  - 3 agree, 0 disagree, 2 idle  {"ok": true, "plan": "P2", "provider": "0xe1724bcfab8d9a8c73e23fd78de403b280160dd5", "name": "Northwind Stream, premium"
+
+[19:42:03] ---- phase B: joins, a refunded join, an early collect, the cancellations, a stranger's cancel
+      [19:42:44] A join(P1) +0.5 GEN  0x3f7bc1959ae2e5f69d1d3e7151425473c1dbcbbcac7876de25426364e5fc01eb  3 agree, 0 disagree, 2 idle  SUCCESS
+PASS  A joins P1 with exactly the fee, and the contract holds it: nothing reaches the provider yet  - 3 agree, 0 disagree, 2 idle  {"ok": true, "membership": "M1", "plan": "P1", "member": "0x69c72bb4de8dae80417893632530f390724a7b96", "fee": 
+      [19:43:31] P collect(M1)  0xea860fbb8daa4b218ee61fd552c34096e33dea15bf42565e3cf5d299d516a396  3 agree, 0 disagree, 2 idle  ERROR
+      [19:43:36] B join(P1) +0.5 GEN  0x159a25503f7c0c401e8a071508574799b18e53c2509430c797f4de4b2af97b9a  3 agree, 0 disagree, 2 idle  SUCCESS
+      [19:43:38] S join(P1) +0.25 GEN  0x7e38c20f5187575f90a1a21a61c2d8c510428dddddd8199fed46f7c0799985dc  3 agree, 0 disagree, 2 idle  SUCCESS
+      [19:43:39] A join(P2) +0.3 GEN  0xbf7bfee85c1ada59956fc91e6b2007e05b94cce69a9614e19f211755d4c13ecb  3 agree, 0 disagree, 2 idle  SUCCESS
+      [19:44:18] B cancel(M2, I would like to ca)  0xdc5d6dcd6480a7095ccff3ee01011385473fd8a5d01379a06439577c0d5cf768  3 agree, 0 disagree, 2 idle  SUCCESS
+      [19:44:23] S cancel(M1, I would like to ca)  0x185bbdf07d54614936c9cd784fb84c8cf20d14557332f09565bbb89ff972bae5  3 agree, 0 disagree, 2 idle  ERROR
+      [19:44:30] A cancel(M3, Please cancel my N)  0x0d5cc5368e2524d03ad86745613321733d560ccdd6b083ed912e477d84e4b2ae  3 agree, 0 disagree, 2 idle  SUCCESS
+      [19:45:07] A cancel(M1, Please cancel my I)  0x8ef7f161be6bcf845907710b9e18deda9877fd4b83d86f659125813db0173440  3 agree, 0 disagree, 2 idle  SUCCESS
+PASS  the provider may not collect A's fee while the period of M1 runs  - 3 agree, 0 disagree, 2 idle  [EXPECTED] the period of M1 runs for another 1760 seconds; its fee is held until it ends
+PASS  a join sent with 0.25 GEN instead of the fee is refused, and the 0.25 GEN comes back in the same transaction  - 3 agree, 0 disagree, 2 idle  send exactly the fee of 500000000000000000 atto to join P1; this one sent 250000000000000000
+PASS  a stranger who holds no membership may not cancel A's, M1  - 3 agree, 0 disagree, 2 idle  [EXPECTED] only the member who holds M1 may cancel it
+PASS  A joins P2 with exactly its fee  - 3 agree, 0 disagree, 2 idle  {"ok": true, "membership": "M3", "plan": "P2", "member": "0x69c72bb4de8dae80417893632530f390724a7b96
+PASS  A asks to cancel P2 at once, so its 5-minute window runs while everything else happens  - 3 agree, 0 disagree, 2 idle  {"ok": true, "request": "R2", "membership": "M3", "plan": "P2", "member": "0x69c72bb4de8dae804178936
+PASS  A asks to cancel P1, and the provider's reply window starts on the chain's clock  - 3 agree, 0 disagree, 2 idle  {"ok": true, "request": "R3", "membership": "M1", "plan": "P1", "member": "0x69c72bb4de8dae804178936
+PASS  B joins P1 with exactly the fee, and the contract holds it for the period  - 3 agree, 0 disagree, 2 idle  {"ok": true, "membership": "M2", "plan": "P1", "member": "0x538c6c660dbf78f060d8ee5c05beaf1c246feb57", "fee": 
+PASS  B asks to cancel P1  - 3 agree, 0 disagree, 2 idle  {"ok": true, "request": "R1", "membership": "M2", "plan": "P1", "member": "0x538c6c660dbf78f060d8ee5c05beaf1c2
+
+[19:45:07] ---- phase C: the replies, each read by the network against the rule
+      [19:45:49] S reply(R3, Your membership is)  0x37b9792ed0921e5f529f340982a2405fddfb54f2f7f8481c82a616d63c699b64  3 agree, 0 disagree, 2 idle  ERROR
+      [19:46:12] P reply(R3, Your membership is)  0x69af655110e9af4b17a32342902f56ba020fa4523556cfe099bd0f5d9a11f9e9  3 agree, 0 disagree, 2 idle  SUCCESS
+PASS  a stranger may not reply to R3  - 3 agree, 0 disagree, 2 idle  [EXPECTED] only the provider of P1 may reply to R3
+PASS  the validators carry one word for the provider's reply to A, in one consensus round  - 3 agree, 0 disagree, 2 idle  -> honoured
+PASS  "cancelled and ends when this month ends" honours the cancellation: nothing moves, and A's fee stays held for the provider  - honoured  {"a":"0","p":"0"}
+      [19:47:14] P reply(R1, We're sorry to see)  0xe4be81049a00e6f653f49a3b35c0048d44ceb407a7d003500cdc3396a54d53da  3 agree, 0 disagree, 2 idle  SUCCESS
+PASS  "please call our member line" stalls the cancellation  - 3 agree, 0 disagree, 2 idle  -> stalled
+PASS  in the same transaction B's 0.5 GEN for this period comes back, and the membership ends now  - {"b":"500000000000000000","p":"0"}
+      [19:47:55] P reply(R3, We're sorry to see)  0x16b8e6bd29d328b22520d04dd09174a2c494233abaec8003e84cb98cbcedded4  3 agree, 0 disagree, 2 idle  ERROR
+PASS  a further reply to R3, now settled, is refused  - 3 agree, 0 disagree, 2 idle  [EXPECTED] R3 is honoured; a reply is taken while the request is open
+PASS  request(R1) shows B's message, the reply, its agreed word and the fee that came back  - {"status":"stalled","verdicts":["stalled"],"refunded":"500000000000000000"}
+
+[19:47:57] ---- phase D: the window nobody answered, and the period that ran out
+      [19:47:59] waiting 52s for the deadline of R2
+      [19:49:38] S lapse(R2)  0xb2c04f91d3480a793ad2d163571ac9c37103456b6d1ec5789a7170d75aa5eeb2  3 agree, 0 disagree, 2 idle  SUCCESS
+PASS  P2's provider never replied: after the window a stranger lapses R2 and A's 0.3 GEN comes back by rule  - 3 agree, 0 disagree, 2 idle  {"ok": true, "request": "R2", "membership": "M3", "status": "lapsed", "member": "0x69c72bb4de8dae8041789363253
+      [19:49:39] waiting 1359s for the end of M1
+      [19:51:41] waiting 1237s for the end of M1
+      [19:53:43] waiting 1115s for the end of M1
+      [19:55:45] waiting 992s for the end of M1
+      [19:57:48] waiting 870s for the end of M1
+      [19:59:50] waiting 748s for the end of M1
+      [20:01:52] waiting 626s for the end of M1
+      [20:03:54] waiting 504s for the end of M1
+      [20:05:56] waiting 382s for the end of M1
+      [20:07:58] waiting 260s for the end of M1
+      [20:10:00] waiting 138s for the end of M1
+      [20:12:03] waiting 15s for the end of M1
+      [20:13:04] S collect(M1)  0xbf7098827f626299d5864fa31b48e5424d9d12e6395fbd0ce2acaeb24a0e1818  5 agree, 0 disagree, 0 idle  SUCCESS
+PASS  once A's period is over a stranger collects M1, and the provider receives the 0.5 GEN  - 5 agree, 0 disagree, 0 idle  {"p":"500000000000000000"}
+
+[20:13:04] ---- phase E: the code read back, the views, the balances
+PASS  the code deployed at 0xc8B97A242cb10c016566572bF8b5BE9b74e81764 is byte for byte contracts/exit_clause.py  - 50783 bytes, sha256 80c62a0d3d3f7ba8b6533a617666e1f6d2146588745d728a6fd40f2a6218902e
+PASS  membership(M1) reads served: the fee collected for the provider, nothing held  - {"status":"served","collected":"500000000000000000"}
+PASS  membership(M2) reads refunded: the fee went back to B  - {"status":"refunded","refunded":"500000000000000000"}
+PASS  stats(): two plans, three memberships, three requests, one honoured, one stalled, one lapsed, one refused join, nothing held  - {"plans":2,"closed_plans":0,"memberships":3,"requests":3,"open_requests":0,"honoured":1,"stalled":1,"lapsed":1,"replies":2,"unclear_replies":0,"refunds":2,"refunded":"800000000000000000","collections":1,"collected":"500000000000000000","held":"0","refused_joins":1,"returned":"250000000000000000"}
+PASS  memberships_of(A) lists A's two memberships, and finds the address in any letter case  - {"address":"0x69c72bb4de8dae80417893632530f390724a7b96","memberships":["M1","M3"],"provides":[]}
+PASS  requests_of(the provider) lists the three cancellations sent to its plans  - {"address":"0xe1724bcfab8d9a8c73e23fd78de403b280160dd5","sent":[],"received":["R1","R2","R3"]}
+PASS  rules() publishes THE RULE word for word, the comparison and the combine table  - one word per reply: "honoured", "stalled" or "unclear"
+PASS  the contract's own balance is zero  - 0
+PASS  every account ends where the money table says: the provider up 0.5 GEN, A down 0.5 GEN, B and the stranger whole  - P 0.5  A -0.5  B 0  S 0
+
+29 passed, 0 failed
+Exit Clause: 0xc8B97A242cb10c016566572bF8b5BE9b74e81764  https://explorer-studio.genlayer.com/address/0xc8B97A242cb10c016566572bF8b5BE9b74e81764
+transactions: 18 in 18 steps; sent a second time: none
+deploy          0x71ba225d42a2399aa3c60fa66170b1b5dd5de95278f8266c0a05d8ce753ef27d 3 agree, 0 disagree, 2 idle SUCCESS
+openGym         0x3c729802d83dbca9c76cc1060db450aabe9ecc6be852b255ec89433437cc69d6 4 agree, 0 disagree, 1 idle SUCCESS
+openStream      0xc5a72eef8c3bb87576b9b5747ca2640db71df483fb0d33f99b4f6ea631295e80 3 agree, 0 disagree, 2 idle SUCCESS
+joinGymA        0x3f7bc1959ae2e5f69d1d3e7151425473c1dbcbbcac7876de25426364e5fc01eb 3 agree, 0 disagree, 2 idle SUCCESS
+collectEarly    0xea860fbb8daa4b218ee61fd552c34096e33dea15bf42565e3cf5d299d516a396 3 agree, 0 disagree, 2 idle ERROR
+joinWrongFee    0x7e38c20f5187575f90a1a21a61c2d8c510428dddddd8199fed46f7c0799985dc 3 agree, 0 disagree, 2 idle SUCCESS
+joinStreamA     0xbf7bfee85c1ada59956fc91e6b2007e05b94cce69a9614e19f211755d4c13ecb 3 agree, 0 disagree, 2 idle SUCCESS
+joinGymB        0x159a25503f7c0c401e8a071508574799b18e53c2509430c797f4de4b2af97b9a 3 agree, 0 disagree, 2 idle SUCCESS
+cancelGymB      0xdc5d6dcd6480a7095ccff3ee01011385473fd8a5d01379a06439577c0d5cf768 3 agree, 0 disagree, 2 idle SUCCESS
+cancelStranger  0x185bbdf07d54614936c9cd784fb84c8cf20d14557332f09565bbb89ff972bae5 3 agree, 0 disagree, 2 idle ERROR
+cancelStreamA   0x0d5cc5368e2524d03ad86745613321733d560ccdd6b083ed912e477d84e4b2ae 3 agree, 0 disagree, 2 idle SUCCESS
+cancelGymA      0x8ef7f161be6bcf845907710b9e18deda9877fd4b83d86f659125813db0173440 3 agree, 0 disagree, 2 idle SUCCESS
+replyStranger   0x37b9792ed0921e5f529f340982a2405fddfb54f2f7f8481c82a616d63c699b64 3 agree, 0 disagree, 2 idle ERROR
+replyA          0x69af655110e9af4b17a32342902f56ba020fa4523556cfe099bd0f5d9a11f9e9 3 agree, 0 disagree, 2 idle SUCCESS
+replyB          0xe4be81049a00e6f653f49a3b35c0048d44ceb407a7d003500cdc3396a54d53da 3 agree, 0 disagree, 2 idle SUCCESS
+replyAgain      0x16b8e6bd29d328b22520d04dd09174a2c494233abaec8003e84cb98cbcedded4 3 agree, 0 disagree, 2 idle ERROR
+lapseStream     0xb2c04f91d3480a793ad2d163571ac9c37103456b6d1ec5789a7170d75aa5eeb2 3 agree, 0 disagree, 2 idle SUCCESS
+collectGymA     0xbf7098827f626299d5864fa31b48e5424d9d12e6395fbd0ce2acaeb24a0e1818 5 agree, 0 disagree, 0 idle SUCCESS
+
