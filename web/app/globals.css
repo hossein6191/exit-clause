@@ -2,8 +2,9 @@
 
 /* Exit Clause looks like a mail client: a cool grey app frame, white panes with hairline borders,
    ink text, one postal-red accent, and a rubber stamp on every judged reply. Nothing in the
-   background moves; the only motion is the stamp landing once, and it is skipped for anyone who
-   asks for reduced motion. */
+   background moves. The only motion is the stamp landing once and, while something is in
+   progress, the airmail edge of the waiting panel and the ring round the current step; all three
+   are skipped for anyone who asks for reduced motion. */
 
 @theme {
   --color-frame: #eef1f4;
@@ -172,8 +173,58 @@
   }
 }
 
+/* The airmail edge of a waiting panel: postal red and ink bars on white, like the border of an
+   airmail envelope. The inner strip is one stripe period (30px across, 42.43px along the edge)
+   wider than the panel, so sliding it by exactly that much loops without a seam. */
+.airmail {
+  height: 5px;
+  overflow: hidden;
+}
+.airmail > span {
+  display: block;
+  height: 100%;
+  width: calc(100% + 43px);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-postal) 0 10px,
+    #fff 10px 15px,
+    var(--color-ink) 15px 25px,
+    #fff 25px 30px
+  );
+}
+.airmail-run > span {
+  animation: airmail 1.2s linear infinite;
+}
+
+@keyframes airmail {
+  from {
+    transform: translateX(-42.43px);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* The step in progress on a step line: a dashed postal ring turning slowly round its number. */
+.step-busy::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 2px dashed var(--color-postal);
+  border-radius: 9999px;
+  animation: step-turn 3s linear infinite;
+}
+
+@keyframes step-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .stamp-in {
+  .stamp-in,
+  .airmail-run > span,
+  .step-busy::after {
     animation: none;
   }
 }

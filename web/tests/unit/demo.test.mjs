@@ -42,16 +42,16 @@ test("one attempt per request every ninety seconds, a hold after a reply was sen
   assert.equal(g.attempt("R99", DEMO_LIMITS.globalWindowMs + 1).ok, true, "and lifts once the minute has passed");
 });
 
-test("the demo provider replies only to a fresh, open request inside the window on one of its own three plans", () => {
+test("the demo provider replies only to a fresh, open request inside the window on one of its own plans", () => {
   const demo = "0xd7e0a3b5c19f42e6a8b0c3d5e7f91a2b4c6d8e0f";
   const plan = { name: DEMO_PLANS[0].name, provider: demo };
   const req = { id: "R7", status: "open", replies: 0, deadline: 1000 };
   assert.equal(isDemoPlan(plan, demo.toUpperCase().replace("0X", "0x")), true);
   assert.equal(demoReplyProblem(req, plan, demo, 999), "");
-  assert.match(demoReplyProblem(req, { ...plan, provider: "0x" + "1".repeat(40) }, demo, 0), /not on one of the demo provider's three plans/);
-  assert.match(demoReplyProblem(req, { ...plan, name: "Ironside Gym" }, demo, 0), /not on one of the demo provider's three plans/);
+  assert.match(demoReplyProblem(req, { ...plan, provider: "0x" + "1".repeat(40) }, demo, 0), /not on one of the demo provider's plans/);
+  assert.match(demoReplyProblem(req, { ...plan, name: "Ironside Gym" }, demo, 0), /not on one of the demo provider's plans/);
   assert.match(demoReplyProblem({ ...req, status: "stalled" }, plan, demo, 0), /R7 is stalled; the demo provider replies only to an open request/);
   assert.match(demoReplyProblem({ ...req, replies: 1 }, plan, demo, 0), /already replied to R7/);
   assert.match(demoReplyProblem(req, plan, demo, 1000), /the reply window of R7 closed; lapse\(R7\) gives the member the fee back/);
-  assert.match(demoReplyProblem(req, plan, "", 0), /not on one of the demo provider's three plans/);
+  assert.match(demoReplyProblem(req, plan, "", 0), /not on one of the demo provider's plans/);
 });

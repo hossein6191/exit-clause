@@ -23,7 +23,7 @@ export function DemoNote({ className, online }: { className?: string; online?: R
         <strong className="font-semibold">The demo provider is offline:</strong> {s.reason}.
       </p>
       <p className="mt-0.5 text-ink-2">
-        Its three plans still take members and cancellations, and a cancellation nobody answers lapses by rule: anyone may send the fee back once the reply window closes.
+        Its plans still take members and cancellations, and a cancellation nobody answers lapses by rule: anyone may send the fee back once the reply window closes.
       </p>
     </div>
   );

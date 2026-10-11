@@ -255,7 +255,7 @@ function Welcome({ now }: { now: number }) {
         <MoneyFlow />
       </Section>
 
-      <Section title="Start here" hint="One wallet is enough: the demo provider replies to its three plans by itself.">
+      <Section title="Start here" hint="One wallet is enough: the demo provider replies on its plans by itself.">
         <div className="flex flex-wrap gap-2">
           <ToolLink href="/plans" variant="ink" icon={<IconPlus />}>
             Try a demo plan
@@ -269,8 +269,8 @@ function Welcome({ now }: { now: number }) {
         </div>
         <ol className="mt-4 grid gap-2 text-[13.5px] text-ink-2 sm:grid-cols-3">
           {[
-            ["Join", "Pick Ironside Gym, Northwind Stream or Lingo Daily Pro and pay its fee. The contract holds it."],
-            ["Send a cancellation", "One click fills the message. The demo provider replies within seconds, in its own habit."],
+            ["Join", "Pick a demo plan by the reply you want to see, from a clean confirmation to a letter by post, and pay its fee. The contract holds it."],
+            ["Send a cancellation", "One click fills the message. The demo provider writes its reply by itself; it lands 1 to 2 minutes later, so stay on the page."],
             ["Watch the stamp", "Validators read the reply twice and stamp it. A stall sends the fee straight back to you."],
           ].map(([title, body], i) => (
             <li key={title} className="rounded-[8px] border border-line bg-frame/50 px-3 py-2.5">

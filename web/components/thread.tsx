@@ -26,13 +26,18 @@ export function Time({ at, className }: { at: number; className?: string }) {
   );
 }
 
-/** The five steps of a thread, the done ones ticked and the next one marked. */
-export function StepLine({ done, className }: { done: number; className?: string }) {
+/**
+ * The five steps of a thread, the done ones ticked and the next one marked. With `busy`, the next
+ * step is in progress right now (a transaction or the demo provider is on it, or the clock must
+ * pass): a dashed ring turns round it, standing still for anyone who asks for reduced motion.
+ */
+export function StepLine({ done, busy, className }: { done: number; busy?: boolean; className?: string }) {
   return (
     <ol className={cx("grid grid-cols-5 gap-1", className)} aria-label="Where this cancellation is">
       {STEPS.map((label, i) => {
         const isDone = i < done;
         const isNext = i === done;
+        const inProgress = isNext && !!busy;
         return (
           <li key={label} className="relative flex min-w-0 flex-col items-center text-center" aria-current={isNext ? "step" : undefined}>
             {i > 0 && (
@@ -42,12 +47,18 @@ export function StepLine({ done, className }: { done: number; className?: string
               className={cx(
                 "relative z-[1] flex size-6 items-center justify-center rounded-full border-2 text-[11px] font-semibold",
                 isDone ? "border-ink bg-ink text-white" : isNext ? "border-postal bg-postal-wash text-postal-ink" : "border-line bg-pane text-ink-3",
+                inProgress && "step-busy",
               )}
             >
               {isDone ? <IconCheck size={12} /> : i + 1}
             </span>
             <span className={cx("mt-1 text-[11px] leading-tight sm:text-xs", isDone ? "text-ink" : isNext ? "font-semibold text-postal-ink" : "text-ink-3")}>{label}</span>
-            <span className="sr-only">{isDone ? "(done)" : isNext ? "(next)" : "(to come)"}</span>
+            {inProgress && (
+              <span aria-hidden="true" className="mono mt-0.5 text-[10px] leading-none font-semibold tracking-wide text-postal-ink uppercase">
+                in progress
+              </span>
+            )}
+            <span className="sr-only">{isDone ? "(done)" : inProgress ? "(in progress now)" : isNext ? "(next)" : "(to come)"}</span>
           </li>
         );
       })}

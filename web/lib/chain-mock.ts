@@ -7,7 +7,7 @@
 // do is ask a model: the verdict on a reply is SCRIPTED here (a demo plan's own reply, a suggestion
 // chip's kind, or a word list for anything else), and the demo bar says so on every page.
 //
-// The visitor acts as one of a few demo accounts. The demo provider runs the three demo plans and
+// The visitor acts as one of a few demo accounts. The demo provider runs the demo plans and
 // replies to their cancellations (demoReply, the in-memory twin of POST /api/demo/reply). A few
 // finished threads are seeded so the ledger and the inbox have something to show, and the clock can
 // be moved on so a closed window or an ended period can be seen. State lasts as long as the tab.
@@ -84,7 +84,7 @@ export const PERSONAS: Persona[] = [
   { address: MY_PROVIDER, name: "You, a provider", note: "R6 on Stillwater Yoga waits for your reply; M8 can be collected" },
   { address: EARLIER_MEMBER, name: "An earlier member", note: "five finished or running threads" },
   { address: PASSER_BY, name: "A passer-by", note: "anyone may lapse or collect once the clock allows" },
-  { address: DEMO_PROVIDER, name: "The demo provider", note: "runs the three demo plans" },
+  { address: DEMO_PROVIDER, name: "The demo provider", note: "runs the demo plans" },
   { address: OTHER_PROVIDER, name: "Brightline Cloud", note: "its first reply to R5 was unclear; one reply left" },
 ];
 
@@ -282,7 +282,7 @@ function scriptedVerdict(plan: PlanRec, text: string): Verdict {
   const demo = demoPlanByName(plan.name);
   if (demo && plan.provider === DEMO_PROVIDER && demo.reply === text) return demo.expect;
   const chip = REPLY_CHIPS.find((x) => x.value === text);
-  if (chip) return chip.kind === "honour" ? "honoured" : chip.kind === "vague" ? "unclear" : "stalled";
+  if (chip) return chip.verdict;
   const t = denied(text);
   if (STALL_WORDS.test(t)) return "stalled";
   if (HONOUR_WORDS.test(t)) return "honoured";
@@ -743,12 +743,14 @@ function seed(): void {
   const MIN = 60;
   const HOUR = 3600;
   const DAY = 86400;
-  // P1 to P3: the demo provider's three plans, opened three days ago.
-  for (const p of DEMO_PLANS) at(DEMO_PROVIDER, now - 3 * DAY, "open_plan", openArgs(p));
+  // P1 to P3: the demo provider's first three plans, opened three days ago.
+  for (const p of DEMO_PLANS.slice(0, 3)) at(DEMO_PROVIDER, now - 3 * DAY, "open_plan", openArgs(p));
   // P4, P5: the "You, a provider" persona's own plans. P6: another provider's.
   at(MY_PROVIDER, now - 40 * DAY, "open_plan", ["Stillwater Yoga, unlimited", ((GEN * 4n) / 10n).toString(), 30 * DAY, 2 * DAY]);
   at(MY_PROVIDER, now - 30 * DAY, "open_plan", ["Paperleaf book box", ((GEN * 6n) / 10n).toString(), 7 * DAY, DAY]);
   at(OTHER_PROVIDER, now - 30 * DAY, "open_plan", ["Brightline Cloud 2 TB", (GEN / 5n).toString(), 30 * DAY, 3 * DAY]);
+  // P7 to P11: the demo provider's five later plans, opened a day ago, as they came on chain after the first three.
+  for (const p of DEMO_PLANS.slice(3)) at(DEMO_PROVIDER, now - DAY, "open_plan", openArgs(p));
   const E = EARLIER_MEMBER;
   const msg = (k: number) => MESSAGE_CHIPS[k].value;
   const gym = DEMO_PLANS[0];

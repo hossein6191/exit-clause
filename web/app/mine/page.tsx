@@ -114,7 +114,7 @@ function MineBody({ address }: { address: string }) {
             })}
           </ul>
         ) : (
-          <p className="text-sm text-ink-3">This address holds no membership yet. The three pinned demo plans are the quickest start.</p>
+          <p className="text-sm text-ink-3">This address holds no membership yet. The pinned demo plans are the quickest start.</p>
         )}
       </Section>
       <Section title="Cancellations you sent" hint="Each thread with the stamp on its last reply. Open one to see the whole exchange.">

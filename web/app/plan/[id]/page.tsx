@@ -1,9 +1,10 @@
 "use client";
 
-// One plan. Its terms, THE RULE it is bound by, the Join button, and, for a member, their own
-// membership with its period counting down and the fee the contract holds, the cancellation composer
-// and the request thread it started. Every transaction shows its explorer link from the moment it is
-// sent, while the validators vote.
+// One plan. Its terms, THE RULE it is bound by, on a demo plan the reply its provider will send and
+// the stamp to expect, the Join button, and, for a member, their own membership with its period
+// counting down and the fee the contract holds, the cancellation composer and the request thread it
+// started. While a transaction goes through, a waiting panel says what is happening, how long it
+// usually takes and to stay; every transaction shows its explorer link from the moment it is sent.
 
 import * as React from "react";
 import Link from "next/link";
@@ -19,6 +20,7 @@ import { Placeholder, ReadError } from "@/components/read-state";
 import { RuleBlock } from "@/components/rule-block";
 import { Section } from "@/components/section";
 import { Suggest } from "@/components/suggest";
+import { StampTag } from "@/components/stamp";
 import { StepLine, Thread, Time, moneyLine } from "@/components/thread";
 import { ToolButton, ToolLink } from "@/components/tool-button";
 import { TxList } from "@/components/tx-list";
@@ -29,10 +31,12 @@ import { useMe } from "@/components/use-me";
 import { useNow } from "@/components/use-now";
 import { useRead } from "@/components/use-read";
 import { useTx } from "@/components/use-tx";
+import { WaitPanel, type Wait } from "@/components/wait-panel";
 import {
   calls,
   hasContract,
   isJudged,
+  isMock,
   joinOutcome,
   membershipPhaseNow,
   readMembership,
@@ -43,8 +47,8 @@ import {
   succeeded,
 } from "@/lib/chain";
 import { demoPlanByName, isDemoPlan } from "@/lib/demo-plans";
-import { gen, windowLabel } from "@/lib/format";
-import { MAX_MESSAGE, isOver, messageProblem, parsePlanId, plain, stepsDone } from "@/lib/rules";
+import { clockTime, gen, windowLabel } from "@/lib/format";
+import { MAX_MESSAGE, STAMPS, isOver, messageProblem, parsePlanId, plain, stepsDone } from "@/lib/rules";
 import { MESSAGE_CHIPS } from "@/lib/suggestions";
 import { rememberTx, setDemoSkipped } from "@/lib/tx-memory";
 import type { Call, Membership, Plan, TxStatus } from "@/lib/types";
@@ -59,7 +63,7 @@ export default function PlanPage() {
       back={{ href: "/plans", label: "Plans" }}
       list={
         <>
-          <ListHead title="Plans" hint="The pinned three answer cancellations by themselves." />
+          <ListHead title="Plans" hint="The pinned demo plans answer cancellations by themselves." />
           <PlanRows selected={id} />
         </>
       }
@@ -131,6 +135,7 @@ function PlanBody({ plan, refreshPlan }: { plan: Plan; refreshPlan: () => Promis
   const habit = demoPlan ? demoPlanByName(plan.name)?.habit : "";
   // With the demo provider offline its address may be unknown: a plan bearing a demo plan's name still says why nobody replies.
   const showDemo = demoPlan || (!!demo && !demo.online && !!demoPlanByName(plan.name));
+  const story = showDemo ? demoPlanByName(plan.name) : null;
   const isProvider = !!me.address && me.address === plan.provider;
 
   const mine = useRead(() => readMembershipsOf(me.address), ["plan-mine", me.address], { enabled: hasContract() && !!me.address });
@@ -166,8 +171,13 @@ function PlanBody({ plan, refreshPlan }: { plan: Plan; refreshPlan: () => Promis
     void refreshAll();
   });
 
+  // The call being signed (tx.call is set only once there is a hash) and when the wait for it began.
+  const [pending, setPending] = React.useState<Call | null>(null);
+  const [since, setSince] = React.useState(0);
   const send = (call: Call) => {
     if (call.fn === "cancel") skipRef.current = skipDemo;
+    setPending(call);
+    setSince(Math.floor(Date.now() / 1000));
     void tx.start(call);
   };
 
@@ -176,6 +186,81 @@ function PlanBody({ plan, refreshPlan }: { plan: Plan; refreshPlan: () => Promis
   const canJoin = plan.status === "open" && !isProvider && (!mem || memOver);
   const plainMessage = plain(message);
   const msgProblem = message ? messageProblem(plainMessage) : "";
+
+  // ---- what this page is waiting for right now, in one panel where the action happened ----
+  const clock = now || plan.now;
+  const callNow = tx.error ? null : (tx.call ?? (tx.sending ? pending : null));
+  const stepOf = (c: Call) => (c.fn === "join" ? 0 : c.fn === "cancel" ? 1 : undefined);
+  const sent = tx.final && tx.call?.fn === "cancel" ? sentRequest(tx.final) : "";
+  let wait: Wait | null = null;
+  if (tx.sending && !tx.hash && callNow) {
+    wait = {
+      id: "sign",
+      tone: "busy",
+      kicker: isMock ? "Sending" : "Your wallet",
+      title: isMock ? `${labelOf(callNow, plan)}…` : "Confirm the transaction in your wallet",
+      body: isMock ? undefined : `${labelOf(callNow, plan)}. Nothing is sent until you confirm it there.`,
+      since,
+      step: stepOf(callNow),
+    };
+  } else if (tx.hash && tx.call && !tx.final) {
+    const c = tx.call;
+    if (c.fn === "join")
+      wait = {
+        id: "join",
+        tone: "busy",
+        title: `Joining ${plan.name}`,
+        body: `One transaction: the validators check the call, and the contract takes the fee of ${gen(plan.feeAtto)} and holds it for ${windowLabel(plan.period)}.`,
+        expect: "about 30 seconds",
+        since,
+        stay: "Stay on this page; your membership and the cancellation form appear below by themselves.",
+        step: 0,
+      };
+    else if (c.fn === "cancel")
+      wait = {
+        id: "cancel",
+        tone: "busy",
+        title: "Your cancellation is being sent",
+        body: demoPlan
+          ? "One transaction. When it is final this page opens the thread, and the demo provider starts writing its reply there; that takes another 1 to 2 minutes."
+          : `One transaction. When it is final this page opens the thread; the provider then has ${windowLabel(plan.replyWindow)} to reply.`,
+        expect: "about 30 seconds",
+        since,
+        stay: "Stay on this page; the thread opens by itself.",
+        step: 1,
+      };
+    else
+      wait = {
+        id: c.fn,
+        tone: "busy",
+        title: c.fn === "collect" ? `Collecting ${c.args[0]} for the provider` : `Closing ${plan.id} to new members`,
+        body:
+          c.fn === "collect"
+            ? "One transaction. The held fee leaves the contract for the provider and the membership is served."
+            : "One transaction. Memberships already running keep going to their own end.",
+        expect: "about 30 seconds",
+        since,
+        stay: "Stay on this page; it updates by itself.",
+      };
+  } else if (sent) {
+    wait = { id: "cancel-sent", tone: "busy", title: `Sent as ${sent}. Opening its thread…`, since, step: 2 };
+  }
+  if (!wait && mem && mem.status === "cancelled" && membershipPhaseNow(mem, clock) === "cancelled")
+    wait = {
+      id: "collect-clock",
+      tone: "clock",
+      kicker: "Honoured · waiting for the period",
+      title: "Honoured. Collect opens when the period ends",
+      body: (
+        <>
+          The fee stays held for the provider until <strong className="text-ink">{clockTime(mem.end, clock)}</strong>. Then anyone may collect it for the provider, and the
+          membership is served.
+        </>
+      ),
+      left: mem.end - clock,
+      leftLabel: "until collect opens",
+      stay: mem.end - clock <= 3600 ? "Stay here and the Collect button appears below by itself, or come back later." : undefined,
+    };
 
   return (
     <ReadingBody>
@@ -203,6 +288,24 @@ function PlanBody({ plan, refreshPlan }: { plan: Plan; refreshPlan: () => Promis
       <Section title="The rule this plan is bound by" hint="The provider chose the fee, the period and the window. This sentence is the contract's own." className="mt-6">
         <RuleBlock />
       </Section>
+
+      {story && (
+        <Section title="What this provider will reply" hint="The demo provider sends this reply, word for word, to every cancellation on this plan. Pick a plan by the story you want to watch.">
+          <div className="rounded-[8px] border border-line bg-pane px-3.5 py-3 sm:px-4">
+            <p className="text-xs text-ink-3">The provider {story.habit}:</p>
+            <p className="mt-1 text-[14.5px] leading-relaxed text-ink">{story.reply}</p>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13.5px]">
+            <span className="text-ink-2">Expected stamp</span>
+            <StampTag kind={story.expect} />
+            <span className="text-ink-3">· {STAMPS[story.expect].meaning}</span>
+          </div>
+          <p className="mt-1.5 text-[13.5px] text-ink-2">{story.why}</p>
+          <p className="mt-1.5 text-xs text-ink-3">
+            {isMock ? "In this demo build the stamp is scripted." : "On chain the validators decide; this is what the rule should make of it."}
+          </p>
+        </Section>
+      )}
 
       <Section
         title={isProvider ? "Your plan" : "Join"}
@@ -241,19 +344,25 @@ function PlanBody({ plan, refreshPlan }: { plan: Plan; refreshPlan: () => Promis
             You hold <span className="mono">{mem?.id}</span> in this plan. You may join again once it ends.
           </p>
         )}
-        {showDemo && !isProvider && <DemoNote className="mt-3" online="It replies to a cancellation on this plan within seconds, in its own habit." />}
+        {showDemo && !isProvider && (
+          <DemoNote
+            className="mt-3"
+            online="It replies to every cancellation on this plan by itself. Its reply is a transaction the validators judge, so the stamp lands 1 to 2 minutes after your cancellation."
+          />
+        )}
       </Section>
 
-      {(tx.hash || tx.error) && (
-        <div className="py-2">
+      {(wait || tx.hash || tx.error) && (
+        <div className="flex flex-col gap-2 py-2">
+          {wait && <WaitPanel wait={wait} />}
           {tx.hash && tx.call && <TxRail hash={tx.hash} label={labelOf(tx.call, plan)} judged={isJudged(tx.call.fn)} onDone={tx.onDone} />}
           {tx.error && (
-            <p role="alert" className="mt-2 text-sm text-postal-ink">
+            <p role="alert" className="text-sm text-postal-ink">
               {tx.error}
             </p>
           )}
           {tx.final && tx.call?.fn === "join" && joinOutcome(tx.final).kind === "joined" && (
-            <p className="mt-2 text-sm text-honoured-ink">Joined. Your membership is below; send a cancellation whenever you like.</p>
+            <p className="text-sm text-honoured-ink">Joined. Your membership is below; send a cancellation whenever you like.</p>
           )}
         </div>
       )}
@@ -342,7 +451,11 @@ function PlanBody({ plan, refreshPlan }: { plan: Plan; refreshPlan: () => Promis
             </ToolLink>
           }
         >
-          <StepLine done={stepsDone({ requestStatus: reqRead.data.status, replies: reqRead.data.replies.length, membershipStatus: mem.status })} className="mb-4" />
+          <StepLine
+            done={stepsDone({ requestStatus: reqRead.data.status, replies: reqRead.data.replies.length, membershipStatus: mem.status })}
+            busy={reqRead.data.status === "open" || wait?.id === "collect-clock" || wait?.id === "collect"}
+            className="mb-4"
+          />
           <Thread t={reqRead.data} me={me.address} />
           <p className="mt-6 text-[13.5px] text-ink-2">{moneyLine(reqRead.data, mem.status)}</p>
         </Section>

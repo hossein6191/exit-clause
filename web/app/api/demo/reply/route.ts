@@ -1,5 +1,5 @@
 // POST /api/demo/reply {request}: the demo provider sends its plan's scripted reply to a cancellation
-// on one of its three plans, while the request is open, inside its window and not yet replied to.
+// on one of its plans, while the request is open, inside its window and not yet replied to.
 // Rate-limited per request and in total, one signature at a time; answers the transaction hash, or
 // why not. Nothing here ever logs or returns the key.
 

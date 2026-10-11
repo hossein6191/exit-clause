@@ -1,7 +1,7 @@
 "use client";
 
 // The plans as inbox rows: name, fee, period, reply window and live members, the demo provider's
-// three pinned on top. Used by /plans as the whole list and beside a plan as the list pane.
+// plans pinned on top, each with the stamp its scripted reply should get. Used by /plans as the whole list and beside a plan as the list pane.
 
 import * as React from "react";
 import Link from "next/link";
@@ -24,7 +24,8 @@ export function usePlans() {
 }
 
 function Row({ p, selected, demo }: { p: PlanRow; selected: boolean; demo: boolean }) {
-  const habit = demo ? demoPlanByName(p.name)?.habit : "";
+  const story = demo ? demoPlanByName(p.name) : null;
+  const habit = story?.habit ?? "";
   return (
     <li>
       <Link
@@ -51,6 +52,7 @@ function Row({ p, selected, demo }: { p: PlanRow; selected: boolean; demo: boole
             <span className="mono">{p.live}</span> live
           </span>
           {demo && <Pill tone="postal">demo provider</Pill>}
+          {story && <Pill tone={story.expect}>expect {story.expect}</Pill>}
           {p.status === "closed" && <Pill>closed</Pill>}
         </div>
       </Link>

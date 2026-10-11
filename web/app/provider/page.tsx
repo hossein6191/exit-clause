@@ -42,7 +42,7 @@ export default function ProviderPage() {
       </p>
       <OpenPlan />
       <MyDesk />
-      <Section title="The demo provider" hint="The site's own provider runs three plans and replies to their cancellations by itself.">
+      <Section title="The demo provider" hint="The site's own provider runs the pinned demo plans and replies to their cancellations by itself.">
         <DemoNote />
       </Section>
     </Single>

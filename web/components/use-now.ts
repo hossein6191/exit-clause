@@ -23,3 +23,14 @@ function subscribe(cb: () => void): () => void {
 export function useNow(): number {
   return useSyncExternalStore(subscribe, nowSeconds, () => 0);
 }
+
+const wallSeconds = (): number => Math.floor(Date.now() / 1000);
+
+/**
+ * The browser's own clock in whole seconds, ticking once a second: what a waiting panel counts
+ * elapsed time with, since a wait is lived in real seconds even when the demo clock was moved on.
+ * 0 on the server and during hydration.
+ */
+export function useWallNow(): number {
+  return useSyncExternalStore(subscribe, wallSeconds, () => 0);
+}

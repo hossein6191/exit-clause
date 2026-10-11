@@ -2,9 +2,10 @@
 //
 //   node --test tests/unit/mock-flow.test.mjs
 //
-// A visitor joins each of the three demo plans, sends a cancellation, the demo provider replies in its
-// own habit and the stamp lands: Ironside honours it, Northwind and Lingo stall it and the fee comes
-// back in the same transaction. The honoured period is collected for the gym once it ends, a silent
+// A visitor joins each of the eight demo plans, sends a cancellation, the demo provider replies in its
+// own habit and the stamp lands: Ironside, Brightline and Daily Brew honour it, Northwind, Lingo,
+// PageTurn and CloudNest stall it and the fee comes back in the same transaction, and FitPulse's reply
+// is unclear, so nothing moves until its window closes and the request lapses. The honoured period is collected for the gym once it ends, a silent
 // window lapses, and every refusal a visitor can meet is walked with its way out. After every step no
 // atto is created or lost.
 
@@ -56,6 +57,7 @@ async function demoPlanId(name) {
 }
 
 const memberships = {};
+const requests = {};
 
 test("each demo plan: join, cancel, the demo provider's reply, and the stamp the money follows", async () => {
   const total = await world();
@@ -75,6 +77,7 @@ test("each demo plan: join, cancel, the demo provider's reply, and the stamp the
     const c = await send(VISITOR, calls.cancel(m, MESSAGE_CHIPS[0].value));
     assert.equal(c.result.ok, true);
     const req = c.result.request;
+    requests[p.key] = req;
     assert.equal((await view("request", [req])).phase, "reply");
 
     const asked = await mock.demoReply(req);
@@ -89,6 +92,12 @@ test("each demo plan: join, cancel, the demo provider's reply, and the stamp the
       assert.equal(r.result.refunded, p.feeAtto, "the month comes back in the same transaction");
       assert.equal(mem.status, "refunded");
       assert.equal(await mock.balanceOf(VISITOR), start, "the visitor has the fee back");
+    } else if (p.expect === "unclear") {
+      assert.equal(thread.status, "open", "an unclear reply moves nothing");
+      assert.equal(r.result.refunded, "0");
+      assert.equal(mem.status, "cancelling");
+      assert.equal(mem.held, p.feeAtto, "the fee stays held while the request is open");
+      assert.equal(await mock.balanceOf(VISITOR), start - fee);
     } else {
       assert.equal(thread.status, "honoured");
       assert.equal(mem.status, "cancelled");
@@ -174,7 +183,7 @@ test("the refusals a visitor can meet, each with its way out", async () => {
   // The demo provider never answers for another provider's plan.
   const foreign = await mock.demoReply("R6");
   assert.equal(foreign.ok, false);
-  assert.match(foreign.reason, /not on one of the demo provider's three plans/);
+  assert.match(foreign.reason, /not on one of the demo provider's plans/);
   await conserved(total, "refusals");
 });
 
@@ -216,4 +225,21 @@ test("two unclear replies leave the provider no third, and the window's end give
   assert.equal(s.result.status, "lapsed");
   assert.equal(await mock.balanceOf(EARLIER_MEMBER), start + BigInt(before.fee));
   await conserved(total, "two unclear, then lapsed");
+});
+
+test("FitPulse: an unclear reply, no second one from the demo provider, and the fee back once the window closes", async () => {
+  const total = await world();
+  const p = DEMO_PLANS.find((x) => x.key === "fitpulse");
+  const req = requests.fitpulse;
+  assert.deepEqual((await view("request", [req])).verdicts, ["unclear"]);
+  const again = await mock.demoReply(req);
+  assert.equal(again.ok, false);
+  assert.match(again.reason, new RegExp(`already replied to ${req}`));
+  mock.advanceClock(DEMO_WINDOW);
+  const start = await mock.balanceOf(VISITOR);
+  const s = await send(VISITOR, calls.lapse(req));
+  assert.equal(s.result.status, "lapsed");
+  assert.equal(s.result.refunded, p.feeAtto);
+  assert.equal(await mock.balanceOf(VISITOR), start + BigInt(p.feeAtto), "the member has the fee back");
+  await conserved(total, "fitpulse lapsed");
 });

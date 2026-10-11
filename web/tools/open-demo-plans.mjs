@@ -1,9 +1,10 @@
-// Opens the demo provider's three plans (Ironside Gym, Northwind Stream, Lingo Daily Pro) from its key,
-// once. One plan takes any number of members, so no copies are needed. Run it by hand after the
-// contract is deployed; nothing in the build runs it.
+// Opens the demo provider's plans (lib/demo-plans.ts) from its key, once. One plan takes any number
+// of members, so no copies are needed. Run it by hand after the contract is deployed; nothing in the
+// build runs it. ONLY picks some of the plans by key; without it, every plan is opened.
 //
 //   REGISTER=0x... DEMO_PROVIDER_KEY=0x... node tools/open-demo-plans.mjs
-//   DRY=1 REGISTER=0x... node tools/open-demo-plans.mjs          # print the calls, send nothing
+//   ONLY=brightline,pageturn,cloudnest,fitpulse,dailybrew REGISTER=0x... DEMO_PROVIDER_KEY=0x... node tools/open-demo-plans.mjs
+//   DRY=1 ONLY=... REGISTER=0x... node tools/open-demo-plans.mjs    # print the calls, send nothing
 //
 // The key is a throwaway Studio test key, the same one the site's server holds in DEMO_PROVIDER_KEY;
 // it is read from the environment only and never printed. Studio is gasless, so the key needs no GEN.
@@ -14,7 +15,7 @@ import { createAccount, createClient } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 
 import { cleanKey, keyProblem } from "../lib/demo-key.ts";
-import { DEMO_PLANS, openArgs } from "../lib/demo-plans.ts";
+import { DEMO_PLANS, demoPlansByKeys, openArgs } from "../lib/demo-plans.ts";
 
 const RPC = "https://studio.genlayer.com/api";
 const EXPLORER = "https://explorer-studio.genlayer.com";
@@ -22,12 +23,16 @@ const studio = { ...studionet, rpcUrls: { ...studionet.rpcUrls, default: { http:
 
 const REGISTER = (process.env.REGISTER || "").trim();
 const DRY = process.env.DRY === "1";
+const ONLY = (process.env.ONLY || "").trim();
 
 const fail = (message) => {
   console.error(message);
   process.exit(2);
 };
 if (!/^0x[0-9a-fA-F]{40}$/.test(REGISTER)) fail("REGISTER must be the deployed contract's 0x address.");
+const picked = ONLY ? demoPlansByKeys(ONLY) : { plans: DEMO_PLANS, problem: "" };
+if (picked.problem) fail(`ONLY: ${picked.problem}.`);
+const PLANS = picked.plans;
 const problem = keyProblem(process.env.DEMO_PROVIDER_KEY);
 if (!DRY && problem) fail(`DEMO_PROVIDER_KEY: ${problem}.`);
 
@@ -99,11 +104,11 @@ async function openNames(client, provider) {
   return names;
 }
 
-console.log(`${DRY ? "DRY RUN: " : ""}the three demo plans to ${REGISTER}`);
+console.log(`${DRY ? "DRY RUN: " : ""}${PLANS.length} demo plan${PLANS.length === 1 ? "" : "s"} (${PLANS.map((p) => p.key).join(", ")}) to ${REGISTER}`);
 if (DRY) {
-  for (const p of DEMO_PLANS) {
+  for (const p of PLANS) {
     const a = openArgs(p);
-    console.log(`open_plan(${JSON.stringify(a[0])}, "${a[1]}", ${a[2]}, ${a[3]})   # ${p.habit}`);
+    console.log(`open_plan(${JSON.stringify(a[0])}, "${a[1]}", ${a[2]}, ${a[3]})   # ${p.key}: ${p.habit}, expect ${p.expect}`);
   }
   process.exit(0);
 }
@@ -115,7 +120,7 @@ const client = createClient({ chain: studio, account });
 const already = await openNames(client, provider);
 
 const made = [];
-for (const p of DEMO_PLANS) {
+for (const p of PLANS) {
   if (already.has(p.name)) {
     console.log(`SKIP  ${p.name}: this provider already runs it open`);
     continue;
