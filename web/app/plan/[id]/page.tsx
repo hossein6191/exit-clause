@@ -3,8 +3,10 @@
 // One plan. Its terms, THE RULE it is bound by, on a demo plan the reply its provider will send and
 // the stamp to expect, the Join button, and, for a member, their own membership with its period
 // counting down and the fee the contract holds, the cancellation composer and the request thread it
-// started. While a transaction goes through, a waiting panel says what is happening, how long it
-// usually takes and to stay; every transaction shows its explorer link from the moment it is sent.
+// started. One waiting panel (lib/guide.ts) says what is happening now, how long it takes, whether
+// anything is needed, whether the page can be closed and where the fee is: while a transaction goes
+// through, and for the member's own membership the rest of the time, live, cancelling, honoured or
+// closed. Every transaction shows its explorer link from the moment it is sent.
 
 import * as React from "react";
 import Link from "next/link";
@@ -31,7 +33,7 @@ import { useMe } from "@/components/use-me";
 import { useNow } from "@/components/use-now";
 import { useRead } from "@/components/use-read";
 import { useTx } from "@/components/use-tx";
-import { WaitPanel, type Wait } from "@/components/wait-panel";
+import { WaitPanel, waitOf, type Wait } from "@/components/wait-panel";
 import {
   calls,
   hasContract,
@@ -47,7 +49,8 @@ import {
   succeeded,
 } from "@/lib/chain";
 import { demoPlanByName, isDemoPlan } from "@/lib/demo-plans";
-import { clockTime, gen, windowLabel } from "@/lib/format";
+import { gen, windowLabel } from "@/lib/format";
+import { membershipGuide, sendingGuide, signGuide, updatingGuide } from "@/lib/guide";
 import { MAX_MESSAGE, STAMPS, isOver, messageProblem, parsePlanId, plain, stepsDone } from "@/lib/rules";
 import { MESSAGE_CHIPS } from "@/lib/suggestions";
 import { rememberTx, setDemoSkipped } from "@/lib/tx-memory";
@@ -187,80 +190,55 @@ function PlanBody({ plan, refreshPlan }: { plan: Plan; refreshPlan: () => Promis
   const plainMessage = plain(message);
   const msgProblem = message ? messageProblem(plainMessage) : "";
 
-  // ---- what this page is waiting for right now, in one panel where the action happened ----
+  // ---- what this page is waiting for right now, in one panel where the action happened (lib/guide.ts) ----
   const clock = now || plan.now;
   const callNow = tx.error ? null : (tx.call ?? (tx.sending ? pending : null));
   const stepOf = (c: Call) => (c.fn === "join" ? 0 : c.fn === "cancel" ? 1 : undefined);
   const sent = tx.final && tx.call?.fn === "cancel" ? sentRequest(tx.final) : "";
+  const feeOf = (c: Call) => (c.fn === "join" ? String(c.value ?? plan.feeAtto) : (mem?.feeAtto ?? plan.feeAtto));
   let wait: Wait | null = null;
   if (tx.sending && !tx.hash && callNow) {
-    wait = {
-      id: "sign",
-      tone: "busy",
-      kicker: isMock ? "Sending" : "Your wallet",
-      title: isMock ? `${labelOf(callNow, plan)}…` : "Confirm the transaction in your wallet",
-      body: isMock ? undefined : `${labelOf(callNow, plan)}. Nothing is sent until you confirm it there.`,
+    wait = waitOf(signGuide({ fn: callNow.fn, label: labelOf(callNow, plan), feeAtto: feeOf(callNow), heldAtto: mem?.heldAtto, mock: isMock }), {
       since,
       step: stepOf(callNow),
-    };
+    });
   } else if (tx.hash && tx.call && !tx.final) {
     const c = tx.call;
-    if (c.fn === "join")
-      wait = {
-        id: "join",
-        tone: "busy",
-        title: `Joining ${plan.name}`,
-        body: `One transaction: the validators check the call, and the contract takes the fee of ${gen(plan.feeAtto)} and holds it for ${windowLabel(plan.period)}.`,
-        expect: "about 30 seconds",
-        since,
-        stay: "Stay on this page; your membership and the cancellation form appear below by themselves.",
-        step: 0,
-      };
-    else if (c.fn === "cancel")
-      wait = {
-        id: "cancel",
-        tone: "busy",
-        title: "Your cancellation is being sent",
-        body: demoPlan
-          ? "One transaction. When it is final this page opens the thread, and the demo provider starts writing its reply there; that takes another 1 to 2 minutes."
-          : `One transaction. When it is final this page opens the thread; the provider then has ${windowLabel(plan.replyWindow)} to reply.`,
-        expect: "about 30 seconds",
-        since,
-        stay: "Stay on this page; the thread opens by itself.",
-        step: 1,
-      };
-    else
-      wait = {
-        id: c.fn,
-        tone: "busy",
-        title: c.fn === "collect" ? `Collecting ${c.args[0]} for the provider` : `Closing ${plan.id} to new members`,
-        body:
-          c.fn === "collect"
-            ? "One transaction. The held fee leaves the contract for the provider and the membership is served."
-            : "One transaction. Memberships already running keep going to their own end.",
-        expect: "about 30 seconds",
-        since,
-        stay: "Stay on this page; it updates by itself.",
-      };
+    wait = waitOf(
+      sendingGuide({
+        fn: c.fn,
+        role: isProvider ? "provider" : "member",
+        planName: plan.name,
+        planId: plan.id,
+        target: c.fn === "collect" ? String(c.args[0]) : undefined,
+        feeAtto: feeOf(c),
+        heldAtto: mem?.heldAtto,
+        period: plan.period,
+        replyWindow: plan.replyWindow,
+        demo: demoPlan && !skipDemo,
+        mock: isMock,
+      }),
+      { since, step: stepOf(c) },
+    );
   } else if (sent) {
-    wait = { id: "cancel-sent", tone: "busy", title: `Sent as ${sent}. Opening its thread…`, since, step: 2 };
+    wait = waitOf(updatingGuide(`Sent as ${sent}. Opening its thread…`), { since, step: 2 });
   }
-  if (!wait && mem && mem.status === "cancelled" && membershipPhaseNow(mem, clock) === "cancelled")
-    wait = {
-      id: "collect-clock",
-      tone: "clock",
-      kicker: "Honoured · waiting for the period",
-      title: "Honoured. Collect opens when the period ends",
-      body: (
-        <>
-          The fee stays held for the provider until <strong className="text-ink">{clockTime(mem.end, clock)}</strong>. Then anyone may collect it for the provider, and the
-          membership is served.
-        </>
-      ),
-      left: mem.end - clock,
-      leftLabel: "until collect opens",
-      stay: mem.end - clock <= 3600 ? "Stay here and the Collect button appears below by itself, or come back later." : undefined,
-    };
+  if (!wait && mem && clock > 0)
+    wait = waitOf(
+      membershipGuide({
+        now: clock,
+        id: mem.id,
+        status: mem.status,
+        end: mem.end,
+        feeAtto: mem.feeAtto,
+        heldAtto: mem.heldAtto,
+        refundedAtto: mem.refundedAtto,
+        collectedAtto: mem.collectedAtto,
+        request: mem.request,
+        deadline: reqRead.data?.id === mem.request ? reqRead.data.deadline : undefined,
+        demo: demoPlan,
+      }),
+    );
 
   return (
     <ReadingBody>

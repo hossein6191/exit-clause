@@ -1,6 +1,7 @@
 "use client";
 
-// Cancellations as inbox rows: the plan, the last word in the thread and its stamp. Beside a request
+// Cancellations as inbox rows: the plan, the last word in the thread, its stamp, and one line from
+// lib/guide.ts saying who the thread waits for and what the viewer can do. Beside a request
 // it lists the visitor's own threads (sent and received) or, for a visitor with no wallet, the most
 // recent ones on the contract. Reads are spaced: Studio allows 30 a minute from one browser.
 
@@ -12,8 +13,10 @@ import { Placeholder, ReadError, readEach } from "@/components/read-state";
 import { StampTag } from "@/components/stamp";
 import { Time } from "@/components/thread";
 import { useMe } from "@/components/use-me";
+import { useNow } from "@/components/use-now";
 import { useAfterTx, useRead } from "@/components/use-read";
 import { hasContract, readMine, readRequest, readStats } from "@/lib/chain";
+import { memberStatusOf, threadLine, type Role } from "@/lib/guide";
 import { idNumber, stampOfReply, type StampKind } from "@/lib/rules";
 import type { ReadResult, Request } from "@/lib/types";
 import { cx } from "@/lib/cx";
@@ -36,7 +39,32 @@ export async function readRequests(ids: string[], cap = 10): Promise<Request[]> 
   return rows;
 }
 
-export function ThreadRow({ r, me, selected }: { r: Request; me?: string; selected?: boolean }) {
+/** The thread's one-line status for whoever is looking. */
+export function rowLine(r: Request, me: string | undefined, now: number, judging?: boolean): string {
+  const clock = now || r.now;
+  if (!(clock > 0)) return "";
+  const role: Role = me && me === r.member ? "member" : me && me === r.provider ? "provider" : "visitor";
+  return threadLine({
+    role,
+    now: clock,
+    id: r.id,
+    membership: r.membership,
+    status: r.status,
+    deadline: r.deadline,
+    replies: r.replies.length,
+    repliesLeft: r.repliesLeft,
+    memberStatus: memberStatusOf(r),
+    end: r.end,
+    feeAtto: r.feeAtto,
+    heldAtto: r.heldAtto,
+    refundedAtto: r.refundedAtto,
+    judging: judging ? "busy" : undefined,
+  });
+}
+
+export function ThreadRow({ r, me, selected, judging }: { r: Request; me?: string; selected?: boolean; judging?: boolean }) {
+  const now = useNow();
+  const line = rowLine(r, me, now, judging);
   const stamp = latestStamp(r);
   const last = r.replies.length ? r.replies[r.replies.length - 1].text : r.message;
   const role = me && me === r.member ? "you cancelled" : me && me === r.provider ? "to your plan" : "";
@@ -59,6 +87,7 @@ export function ThreadRow({ r, me, selected }: { r: Request; me?: string; select
           {stamp ? <StampTag kind={stamp} className="shrink-0" /> : <Pill tone="postal">awaiting reply</Pill>}
         </div>
         <p className="mt-0.5 line-clamp-2 text-[12.5px] text-ink-3">{last}</p>
+        {line && <p className="mt-1 text-[12.5px] leading-snug font-medium text-ink-2">{line}</p>}
         <p className="mt-1 text-[11.5px] text-ink-3">
           <span className="mono">{r.id}</span>
           {role && <> · {role}</>}

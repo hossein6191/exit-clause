@@ -1,7 +1,8 @@
 "use client";
 
-// My memberships: every membership the connected address holds, with its period and the fee the
-// contract still holds, and every cancellation it sent, with the stamp on its last reply.
+// My memberships: every membership the connected address holds, with its period, the fee the
+// contract still holds and one line from lib/guide.ts on what it waits for and what is left to do,
+// and every cancellation it sent, with the stamp on its last reply and the same one line.
 
 import * as React from "react";
 import Link from "next/link";
@@ -21,6 +22,7 @@ import { useNow } from "@/components/use-now";
 import { useRead } from "@/components/use-read";
 import { hasContract, membershipPhaseNow, readMembership, readMine } from "@/lib/chain";
 import { gen } from "@/lib/format";
+import { membershipLine, threadLine } from "@/lib/guide";
 import { idNumber } from "@/lib/rules";
 import type { Membership, ReadResult, Request } from "@/lib/types";
 
@@ -90,6 +92,37 @@ function MineBody({ address }: { address: string }) {
               const word = PHASE_WORD[phase] ?? PHASE_WORD.unknown;
               const req = requests.find((r) => r.id === m.request);
               const stamp = req ? latestStamp(req) : null;
+              const clock = now || m.now;
+              const line = !(clock > 0)
+                ? ""
+                : req
+                  ? threadLine({
+                      role: "member",
+                      now: clock,
+                      id: req.id,
+                      membership: m.id,
+                      status: req.status,
+                      deadline: req.deadline,
+                      replies: req.replies.length,
+                      repliesLeft: req.repliesLeft,
+                      memberStatus: m.status,
+                      end: m.end,
+                      feeAtto: m.feeAtto,
+                      heldAtto: m.heldAtto,
+                      refundedAtto: m.refundedAtto,
+                      collectedAtto: m.collectedAtto,
+                    })
+                  : membershipLine({
+                      now: clock,
+                      id: m.id,
+                      status: m.status,
+                      end: m.end,
+                      feeAtto: m.feeAtto,
+                      heldAtto: m.heldAtto,
+                      refundedAtto: m.refundedAtto,
+                      collectedAtto: m.collectedAtto,
+                      request: m.request,
+                    });
               return (
                 <li key={m.id} className="border-b border-line-soft last:border-b-0">
                   <Link href={m.request ? `/request/${m.request}` : `/plan/${m.plan}`} className="block px-4 py-3 hover:bg-hover">
@@ -104,6 +137,7 @@ function MineBody({ address }: { address: string }) {
                       <Pill tone={word.tone}>{word.text}</Pill>
                       {stamp && <StampTag kind={stamp} />}
                     </div>
+                    {line && <p className="mt-1 text-[13px] leading-snug font-medium text-ink-2">{line}</p>}
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       <HeldChip heldAtto={m.heldAtto} until={m.end} />
                       {(phase === "running" || phase === "cancelled" || phase === "cancelling") && <PeriodChip end={m.end} />}

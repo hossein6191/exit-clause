@@ -2,7 +2,9 @@
 
 // The provider desk. Open a plan (one of three samples, or your own terms, every field one click
 // away), see the plans you run, the cancellations sent to them (reply on each thread), and collect
-// the fees of periods that have ended with nothing open on them.
+// the fees of periods that have ended with nothing open on them. One waiting panel on top
+// (lib/guide.ts) says what the desk waits for: your replies, the validators reading one, served
+// periods to collect, or nothing; each thread row says the same in one line.
 
 import * as React from "react";
 import Link from "next/link";
@@ -19,15 +21,17 @@ import { ToolButton, ToolLink } from "@/components/tool-button";
 import { TxRail } from "@/components/tx-rail";
 import { WalletGate } from "@/components/wallet-gate";
 import { useMe } from "@/components/use-me";
-import { useNow } from "@/components/use-now";
+import { useNow, useWallNow } from "@/components/use-now";
 import { useRead } from "@/components/use-read";
 import { useTx } from "@/components/use-tx";
-import { calls, hasContract, membershipPhaseNow, openedPlan, readMembership, readMine, readPlan } from "@/lib/chain";
+import { WaitPanel, waitOf } from "@/components/wait-panel";
+import { calls, hasContract, isMock, membershipPhaseNow, openedPlan, readMembership, readMine, readPlan, requestPhaseNow } from "@/lib/chain";
 import { SAMPLE_PLANS } from "@/lib/demo-plans";
 import { gen, genText, tryAtto, windowLabel } from "@/lib/format";
+import { deskGuide, sendingGuide, signGuide } from "@/lib/guide";
 import { MAX_NAME, feeProblem, idNumber, nameProblem, periodProblem, plain, windowProblem } from "@/lib/rules";
 import { FEE_CHIPS, NAME_CHIPS, PERIOD_CHIPS, WINDOW_CHIPS } from "@/lib/suggestions";
-import { rememberTx } from "@/lib/tx-memory";
+import { DEMO_REPLY_LABEL, parseRemembered, rememberTx, rememberedRaw } from "@/lib/tx-memory";
 import type { Call, Membership, Plan, ReadResult, Request, TxStatus } from "@/lib/types";
 
 type Desk = { plans: Plan[]; requests: Request[]; due: Membership[] };
@@ -140,8 +144,12 @@ function OpenPlan() {
             </ToolButton>
           </WalletGate>
         </div>
+        {tx.sending && !tx.hash && <WaitPanel wait={waitOf(signGuide({ fn: "open_plan", label: `Opening ${plainName || "a plan"}`, feeAtto: "0", mock: isMock }))} />}
         {(tx.hash || tx.error) && (
-          <div>
+          <div className="flex flex-col gap-2">
+            {tx.hash && !tx.final && (
+              <WaitPanel wait={waitOf(sendingGuide({ fn: "open_plan", role: "provider", planName: plainName, planId: "", feeAtto: "0", mock: isMock }))} />
+            )}
             {tx.hash && <TxRail hash={tx.hash} label={`Opening ${plainName || "a plan"}`} onDone={tx.onDone} />}
             {tx.error && (
               <p role="alert" className="mt-2 text-sm text-postal-ink">
@@ -163,9 +171,20 @@ function OpenPlan() {
   );
 }
 
+/** A reply this browser sent (or asked the demo provider for) in the last few minutes that is not on the thread yet. */
+function replyInFlight(r: Request, wall: number): boolean {
+  if (!wall || r.status !== "open") return false;
+  const sent = parseRemembered(rememberedRaw(r.id)).find(
+    (x) => (x.label === DEMO_REPLY_LABEL || x.label.startsWith("Replying to") || x.label.startsWith("The demo provider replies")) && wall - x.at < 300,
+  );
+  if (!sent) return false;
+  return !r.replies.some((x) => x.at >= sent.at - 30);
+}
+
 function MyDesk() {
   const me = useMe();
   const now = useNow();
+  const wall = useWallNow();
   const read = useRead<Desk>(
     async (): Promise<ReadResult<Desk>> => {
       const ids = (await readMine(me.address)).data;
@@ -186,6 +205,8 @@ function MyDesk() {
     rememberTx(String(call.args[0]), hash, `Collecting ${call.args[0]} for the provider`);
     void read.refresh();
   });
+  // The membership being collected, known from the click (the call itself is known only once it has a hash).
+  const [collecting, setCollecting] = React.useState<Membership | null>(null);
 
   if (!me.address)
     return (
@@ -208,8 +229,25 @@ function MyDesk() {
   const { plans, requests, due } = read.data;
   const collectable = due.filter((m) => membershipPhaseNow(m, now || m.now) === "due");
   const open = requests.filter((r) => r.status === "open");
+  const judging = open.filter((r) => replyInFlight(r, wall)).map((r) => r.id);
+  const clock = now || plans[0]?.now || 0;
+  const guide =
+    clock > 0
+      ? deskGuide({
+          now: clock,
+          plans: plans.length,
+          due: open.filter((r) => !judging.includes(r.id) && r.repliesLeft > 0 && requestPhaseNow(r, clock) === "reply").map((r) => ({ id: r.id, deadline: r.deadline })),
+          judging,
+          collectable: collectable.length,
+          collectableAtto: collectable.reduce((a, m) => a + BigInt(m.heldAtto), 0n).toString(),
+          heldAtto: plans.reduce((a, p) => a + BigInt(p.heldAtto), 0n).toString(),
+          live: plans.reduce((a, p) => a + p.live, 0),
+          mock: isMock,
+        })
+      : null;
   return (
     <>
+      {guide && <WaitPanel wait={waitOf(guide)} className="mt-6" />}
       <Section title="Your plans" hint="The plans this address opened, newest first. Closing one stops new members; every membership runs to its end.">
         {plans.length ? (
           <ul className="divide-y divide-line-soft rounded-[8px] border border-line">
@@ -235,7 +273,7 @@ function MyDesk() {
         {requests.length ? (
           <ul className="overflow-hidden rounded-[8px] border border-line">
             {[...open, ...requests.filter((r) => r.status !== "open")].map((r) => (
-              <ThreadRow key={r.id} r={r} me={me.address} />
+              <ThreadRow key={r.id} r={r} me={me.address} judging={judging.includes(r.id)} />
             ))}
           </ul>
         ) : (
@@ -250,7 +288,15 @@ function MyDesk() {
                 <span>
                   <span className="mono">{m.id}</span> on {m.planName} · <span className="mono">{gen(m.heldAtto)}</span>
                 </span>
-                <ToolButton size="sm" icon={<IconCollect size={14} />} disabled={tx.sending} onClick={() => void tx.start(calls.collect(m.id))}>
+                <ToolButton
+                  size="sm"
+                  icon={<IconCollect size={14} />}
+                  disabled={tx.sending}
+                  onClick={() => {
+                    setCollecting(m);
+                    void tx.start(calls.collect(m.id));
+                  }}
+                >
                   Collect
                 </ToolButton>
               </li>
@@ -259,8 +305,38 @@ function MyDesk() {
         ) : (
           <p className="text-sm text-ink-3">Nothing to collect right now. A fee becomes collectable once its period has ended with no cancellation open.</p>
         )}
+        {tx.sending && !tx.hash && (
+          <WaitPanel
+            wait={waitOf(
+              signGuide({
+                fn: "collect",
+                label: `Collecting ${collecting?.id ?? "a served period"} for you`,
+                feeAtto: collecting?.feeAtto ?? "0",
+                heldAtto: collecting?.heldAtto,
+                mock: isMock,
+              }),
+            )}
+            className="mt-3"
+          />
+        )}
         {(tx.hash || tx.error) && (
-          <div className="mt-3">
+          <div className="mt-3 flex flex-col gap-2">
+            {tx.hash && tx.call && !tx.final && (
+              <WaitPanel
+                wait={waitOf(
+                  sendingGuide({
+                    fn: "collect",
+                    role: "provider",
+                    planName: collecting?.planName ?? "",
+                    planId: collecting?.plan ?? "",
+                    target: String(tx.call.args[0]),
+                    feeAtto: collecting?.feeAtto ?? "0",
+                    heldAtto: collecting?.heldAtto,
+                    mock: isMock,
+                  }),
+                )}
+              />
+            )}
             {tx.hash && tx.call && <TxRail hash={tx.hash} label={`Collecting ${tx.call.args[0]} for the provider`} onDone={tx.onDone} />}
             {tx.error && (
               <p role="alert" className="mt-2 text-sm text-postal-ink">

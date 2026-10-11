@@ -2,10 +2,13 @@
 
 // One cancellation as a thread. The member's message, every provider reply with the stamp the network
 // put on it, the reply deadline counting down, the fee the contract still holds, and the step line
-// that moves by itself. Right under the step line, one waiting panel says what the thread is waiting
-// for now (the demo provider writing, the validators reading, the clock), how long that usually
-// takes and whether to stay; when the wait is over it holds the next button (lapse, collect). On a
-// demo plan the demo provider is asked to reply as soon as the member's cancellation has landed.
+// that moves by itself. Right under the step line, one waiting panel says, for the member, the
+// provider or anyone else, what the thread is waiting for now (the demo provider writing, the
+// validators reading, the provider, the clock), how long that takes or the exact time, what is needed
+// from the viewer, whether they can close the page, and where the fee is (lib/guide.ts); when the
+// wait is over it holds the next button (lapse, collect), and a closed thread says where the money
+// ended up. On a demo plan the demo provider is asked to reply as soon as the member's cancellation
+// has landed.
 
 import * as React from "react";
 import Link from "next/link";
@@ -32,10 +35,11 @@ import { useMe } from "@/components/use-me";
 import { useNow, useWallNow } from "@/components/use-now";
 import { useRead } from "@/components/use-read";
 import { useTx } from "@/components/use-tx";
-import { WaitPanel, type Wait } from "@/components/wait-panel";
-import { calls, isJudged, isMock, membershipPhaseNow, readMembership, readRequest, replyOutcome, requestDemoReply, requestPhaseNow, succeeded, txUrl } from "@/lib/chain";
+import { WaitPanel, waitOf, type Wait } from "@/components/wait-panel";
+import { calls, isJudged, isMock, readMembership, readRequest, replyOutcome, requestDemoReply, requestPhaseNow, succeeded, txUrl } from "@/lib/chain";
 import { demoPlanByName, isDemoPlan } from "@/lib/demo-plans";
-import { clockTime, gen, span, windowLabel } from "@/lib/format";
+import { gen, windowLabel } from "@/lib/format";
+import { signGuide, threadGuide, updatingGuide, type Role, type ThreadInput } from "@/lib/guide";
 import { MAX_REPLY, STAMPS, parseRequestId, plain, replyProblem, stampOfReply, stepsDone, type MembershipStatus } from "@/lib/rules";
 import { REPLY_CHIPS } from "@/lib/suggestions";
 import { DEMO_REPLY_LABEL, demoAsked, demoAskedAt, demoSkipped, parseRemembered, rememberTx, rememberedRaw, setDemoAsked } from "@/lib/tx-memory";
@@ -160,7 +164,6 @@ function RequestBody({
   // With the demo provider offline its address may be unknown: a plan bearing a demo plan's name still says why nobody replies.
   const showDemo = demoPlan || (!!demo && !demo.online && !!story);
   const memberStatus = memStatus ?? (req.status === "open" ? "cancelling" : req.status === "honoured" ? "cancelled" : "refunded");
-  const memPhase = membershipPhaseNow({ status: memberStatus, end: memEnd }, clock);
   const done = stepsDone({ requestStatus: req.status, replies: req.replies.length, membershipStatus: memberStatus });
 
   const [text, setText] = React.useState("");
@@ -224,21 +227,13 @@ function RequestBody({
   const lastStamp = req.status === "lapsed" ? "lapsed" : req.replies.length ? stampOfReply(req.replies[req.replies.length - 1].verdict, req.replies.length - 1) : null;
   const outcome = tx.final && tx.call?.fn === "reply" ? replyOutcome(tx.final) : null;
 
-  // ---- what the thread is waiting for right now, in one panel at the top ----
-  const fee = gen(req.feeAtto);
-  const toWhom = isMember ? "to you" : "to the member";
-  const at = (t: number) => clockTime(t, clock);
+  // ---- what the thread is waiting for right now, in one panel at the top; the words are lib/guide.ts ----
+  const role: Role = isMember ? "member" : isProvider ? "provider" : "visitor";
   // Seconds since the cancellation landed, as a browser-clock instant (the demo clock may have been moved on).
   const sinceSent = wall && clock ? wall - Math.max(0, clock - req.sentAt) : 0;
   const demoSince = askedAt || demoHash?.at || sinceSent;
   const demoLate = !!wall && !!demoSince && wall - demoSince >= DEMO_LATE_S;
   const isDemoReply = (c: Call | null) => !!c && c.fn === "reply" && !!demoText && c.args[1] === demoText;
-  const fallback = (
-    <>
-      If no honoured or stalled reply comes, the reply window closes at <strong className="text-ink">{at(req.deadline)}</strong>, in {span(req.deadline - clock)}; then you can
-      lapse the request and {fee} goes back {toWhom}.
-    </>
-  );
   const askButton = (label: string) => (
     <ToolButton size="sm" variant="ink" icon={<IconRefresh size={14} />} disabled={ask.state === "asking"} onClick={() => void askDemo()}>
       {label}
@@ -258,7 +253,6 @@ function RequestBody({
       </ToolButton>
     </WalletGate>
   );
-  const stayClock = "Stay here and the next button appears by itself, or come back later.";
   const demoWaiting = demoPlan && !!demo?.online && req.status === "open" && req.replies.length === 0 && phase === "reply";
   const callNow = tx.error ? null : (tx.call ?? (tx.sending ? pending : null));
   // The thread already shows what the call did (the network applies it before it is final): from then
@@ -272,232 +266,67 @@ function RequestBody({
           ? memberStatus !== "cancelled"
           : true;
 
+  const base: ThreadInput = {
+    role,
+    now: clock,
+    id: req.id,
+    membership: req.membership,
+    status: req.status,
+    deadline: req.deadline,
+    replies: req.replies.length,
+    repliesLeft: req.repliesLeft,
+    memberStatus,
+    end: memEnd,
+    feeAtto: req.feeAtto,
+    heldAtto: memHeld,
+    refundedAtto: req.refundedAtto,
+    closedAt: req.closedAt,
+    demo: demoPlan,
+    mock: isMock,
+  };
   let wait: Wait | null = null;
   if (tx.sending && !tx.hash && callNow) {
-    wait = {
-      id: "sign",
-      tone: "busy",
-      kicker: isMock ? "Sending" : "Your wallet",
-      title: isMock ? `${labelOf(callNow, req)}…` : "Confirm the transaction in your wallet",
-      body: isMock ? undefined : `${labelOf(callNow, req)}. Nothing is sent until you confirm it there.`,
-      since: txSince,
-    };
+    wait = waitOf(signGuide({ fn: callNow.fn, label: labelOf(callNow, req), feeAtto: req.feeAtto, heldAtto: memHeld, mock: isMock }), { since: txSince });
   } else if (tx.hash && tx.call && !tx.final && !landed(tx.call)) {
     const c = tx.call;
+    const link = { href: txUrl(tx.hash), label: isMock ? "The demo transaction" : "Follow it on the explorer" };
     if (c.fn === "reply") {
       const demoReply = isDemoReply(c);
-      const since = demoReply ? demoSince : txSince;
-      const link = { href: txUrl(tx.hash), label: isMock ? "The demo transaction" : "Follow it on the explorer" };
-      wait =
-        demoReply && demoLate
-          ? {
-              id: "judging-late",
-              tone: "late",
-              title: "The validators are still reading the reply",
-              body: (
-                <>
-                  <p>
-                    It has been over 3 minutes. Studio is slow at times; the stamp still lands here by itself when they finish. You can also ask the demo provider again: if its reply
-                    is already on the way, it does not send a second one.
-                  </p>
-                  <p className="mt-1.5">{fallback}</p>
-                </>
-              ),
-              since,
-              link,
-              action: askButton("Ask the demo provider again"),
-            }
-          : {
-              id: "judging",
-              tone: "busy",
-              title: "The validators are reading the reply",
-              body: "Each validator asks its own model whether the reply honours or stalls the cancellation under the rule, in two framings and two orders. Then the contract stamps it, and a stall sends the fee back in the same transaction.",
-              expect: isMock ? "a few seconds in this demo build, 1 to 2 minutes on Studio" : "1 to 2 minutes",
-              since,
-              stay: "Stay on this page; the stamp appears here by itself.",
-              link,
-            };
-    } else {
-      wait = {
-        id: c.fn,
-        tone: "busy",
-        title: c.fn === "lapse" ? `Lapsing ${req.id}` : `Collecting ${gen(memHeld)} for the provider`,
-        body:
-          c.fn === "lapse"
-            ? `One transaction. The contract sends ${fee} back to the member by rule; no model is asked.`
-            : "One transaction. The held fee leaves the contract for the provider and the membership is served.",
-        expect: "about 30 seconds",
-        since: txSince,
-        stay: "Stay on this page; the thread updates by itself.",
-      };
+      const late = demoReply && demoLate;
+      wait = waitOf(threadGuide({ ...base, judging: late ? "late" : "busy" }), {
+        since: demoReply ? demoSince : txSince,
+        link,
+        action: late ? askButton("Ask the demo provider again") : undefined,
+      });
+    } else if (c.fn === "lapse" || c.fn === "collect") {
+      wait = waitOf(threadGuide({ ...base, sending: c.fn }), { since: txSince, link });
     }
   } else if (tx.final && tx.call && !tx.error && !landed(tx.call)) {
     // Final, but the thread on screen does not show it yet, or nothing was stored.
     const c = tx.call;
     if (c.fn === "reply") {
-      if (outcome) wait = { id: "stamping", tone: "busy", title: `Stamped ${outcome.verdict}. Putting it on the thread…` };
-      else if (isDemoReply(c))
-        wait = {
-          id: "not-stored",
-          tone: "late",
-          kicker: "Nothing stored",
-          title: "The reply was not stored",
-          body: (
-            <>
-              <p>The validators did not settle it, so nothing changed and the reply window is still open. Ask the demo provider again.</p>
-              <p className="mt-1.5">{fallback}</p>
-            </>
-          ),
-          action: askButton("Ask the demo provider again"),
-        };
+      if (outcome) wait = waitOf(updatingGuide(`Stamped ${outcome.verdict}. Putting it on the thread…`));
+      else if (isDemoReply(c)) wait = waitOf(threadGuide({ ...base, demoState: "not-stored" }), { action: askButton("Ask the demo provider again") });
     } else if (succeeded(tx.final)) {
-      wait = { id: "updating", tone: "busy", title: "Final. Updating the thread…" };
+      wait = waitOf(updatingGuide("Final. Updating the thread…"));
     }
   }
   if (!wait && demoWaiting && (!skipped || ask.state !== "idle")) {
     if (ask.state === "failed")
-      wait = {
-        id: "demo-failed",
-        tone: "late",
-        kicker: "No reply yet",
-        title: "The demo provider could not reply yet",
-        body: (
-          <>
-            <p>{ask.reason}</p>
-            <p className="mt-1.5">{fallback}</p>
-          </>
-        ),
-        action: askButton("Ask the demo provider again"),
-      };
+      wait = waitOf(threadGuide({ ...base, demoState: "failed", demoReason: ask.reason }), { action: askButton("Ask the demo provider again") });
     else if (ask.state !== "idle" || autoAsk || askedBefore)
       wait = demoLate
-        ? {
-            id: "demo-late",
-            tone: "late",
-            title: "The demo provider has not answered in 3 minutes",
-            body: (
-              <>
-                <p>Studio may be busy, or the reply did not go through. Ask it again: if a reply is already on its way, it does not send a second one.</p>
-                <p className="mt-1.5">{fallback}</p>
-              </>
-            ),
-            since: demoSince,
-            action: askButton("Ask the demo provider again"),
-          }
-        : {
-            id: "demo-writing",
-            tone: "busy",
-            title: "The demo provider is writing its reply",
-            body: isMock
-              ? "In this demo build it takes a few seconds. On Studio it takes 1 to 2 minutes: the reply is a transaction and the validators read it against the rule."
-              : "This takes 1 to 2 minutes: the reply is a transaction and the validators read it against the rule.",
-            expect: isMock ? "a few seconds here, 1 to 2 minutes on Studio" : "1 to 2 minutes",
-            since: demoSince,
-            stay: "Stay on this page; the stamp appears here by itself.",
-          };
-    else
-      wait = {
-        id: "demo-idle",
-        tone: "clock",
-        kicker: "Waiting for the demo provider",
-        title: "Nobody has asked the demo provider to reply yet",
-        body: "It replies once to each cancellation on this plan, as soon as it is asked. The member's own page asks by itself; you can ask from here too.",
-        left: req.deadline - clock,
-        leftLabel: "until the window closes",
-        action: askButton("Ask the demo provider to reply"),
-      };
+        ? waitOf(threadGuide({ ...base, demoState: "late" }), { since: demoSince, action: askButton("Ask the demo provider again") })
+        : waitOf(threadGuide({ ...base, demoState: ask.state === "asking" || (ask.state === "idle" && autoAsk) ? "asking" : "writing" }), { since: demoSince });
+    else wait = waitOf(threadGuide({ ...base, demoState: "idle" }), { action: askButton("Ask the demo provider to reply") });
   }
-  if (!wait && demoWaiting && skipped)
-    wait = {
-      id: "demo-silent",
-      tone: "clock",
-      kicker: "Watching the window run out",
-      title: "The demo provider stays silent, as you asked",
-      body: (
-        <>
-          When the reply window closes at <strong className="text-ink">{at(req.deadline)}</strong>, lapse the request and {fee} goes back {toWhom} by rule. No model is asked.
-        </>
-      ),
-      left: req.deadline - clock,
-      leftLabel: "until lapse opens",
-      stay: stayClock,
-      action: askButton("Ask it to reply after all"),
-    };
-  if (!wait && req.status === "open" && phase === "reply" && req.replies.length === 0 && !isProvider)
-    wait = {
-      id: "provider-clock",
-      tone: "clock",
-      kicker: "Waiting for the provider",
-      title: "Waiting for the provider's reply",
-      body: (
-        <>
-          The provider has until <strong className="text-ink">{at(req.deadline)}</strong>. A reply that stalls sends the fee back at once; with no honoured or stalled reply by
-          then, anyone may lapse the request and {fee} goes back {toWhom}.
-        </>
-      ),
-      left: req.deadline - clock,
-      leftLabel: "until lapse opens",
-      stay: req.deadline - clock <= 3600 ? stayClock : undefined,
-    };
-  if (!wait && req.status === "open" && phase === "reply" && req.replies.length > 0 && (!isProvider || req.repliesLeft === 0))
-    wait = {
-      id: "unclear-clock",
-      tone: "clock",
-      kicker: "Stamped unclear",
-      title: demoPlan || req.repliesLeft === 0 ? "Nothing moved. Lapse opens when the window closes" : "Nothing moved. The provider may reply once more",
-      body: demoPlan ? (
-        <>
-          The demo provider does not reply again. When the window closes at <strong className="text-ink">{at(req.deadline)}</strong>, lapse the request and {fee} comes back{" "}
-          {toWhom}.
-        </>
-      ) : req.repliesLeft > 0 ? (
-        <>
-          The provider may reply once more before <strong className="text-ink">{at(req.deadline)}</strong>. With no honoured or stalled reply by then, anyone may lapse the request
-          and {fee} goes back {toWhom}.
-        </>
-      ) : (
-        <>
-          Both replies were unclear, so the provider has no third. When the window closes at <strong className="text-ink">{at(req.deadline)}</strong>, lapse the request and {fee}{" "}
-          goes back {toWhom}.
-        </>
-      ),
-      left: req.deadline - clock,
-      leftLabel: "until lapse opens",
-      stay: req.deadline - clock <= 3600 ? stayClock : undefined,
-    };
-  if (!wait && req.status === "open" && phase === "lapse")
-    wait = {
-      id: "lapse-ready",
-      tone: "ready",
-      kicker: "Lapse is open",
-      title: req.replies.length ? "The window closed without an honoured or stalled reply" : "The window closed with no reply",
-      body: `Lapse the request and ${fee} goes back to the member by rule; no model is asked. Anyone may send it.`,
-      action: lapseButton,
-    };
-  if (!wait && memberStatus === "cancelled" && memPhase === "cancelled")
-    wait = {
-      id: "collect-clock",
-      tone: "clock",
-      kicker: "Honoured · waiting for the period",
-      title: "Honoured. Collect opens when the period ends",
-      body: (
-        <>
-          The fee stays held for the provider until <strong className="text-ink">{at(memEnd)}</strong>. Then anyone may collect it for the provider, and the thread closes.
-        </>
-      ),
-      left: memEnd - clock,
-      leftLabel: "until collect opens",
-      stay: memEnd - clock <= 3600 ? stayClock : undefined,
-    };
-  if (!wait && memberStatus === "cancelled" && memPhase === "due")
-    wait = {
-      id: "collect-ready",
-      tone: "ready",
-      kicker: "Collect is open",
-      title: "The period is over",
-      body: `Collect the held ${gen(memHeld)}: it goes to the provider whoever sends it, and the thread closes.`,
-      action: collectButton,
-    };
+  if (!wait && demoWaiting && skipped) wait = waitOf(threadGuide({ ...base, demoState: "silent" }), { action: askButton("Ask it to reply after all") });
+  if (!wait) {
+    const g = threadGuide(base);
+    wait = waitOf(g, { action: g.id === "lapse-ready" ? lapseButton : g.id === "collect-ready" ? collectButton : undefined });
+  }
+  const replyForm = isProvider && req.status === "open" && phase === "reply" && req.repliesLeft > 0;
+  const closed = memberStatus === "refunded" || memberStatus === "served";
 
   return (
     <ReadingBody>
@@ -508,11 +337,11 @@ function RequestBody({
         </Link>
       </p>
       <h1 className="mt-1 text-xl sm:text-2xl">Cancellation · {req.planName}</h1>
-      <StepLine done={done} busy={!!wait && wait.tone !== "ready"} className="mt-4" />
+      <StepLine done={done} busy={wait.tone !== "ready" && wait.tone !== "done"} className="mt-4" />
 
       {(wait || tx.hash || tx.error) && (
         <div className="mt-4 flex flex-col gap-2">
-          {wait && <WaitPanel wait={wait} />}
+          <WaitPanel wait={wait} />
           {tx.hash && tx.call && <TxRail hash={tx.hash} label={labelOf(tx.call, req)} judged={isJudged(tx.call.fn)} onDone={tx.onDone} />}
           {tx.error && (
             <p role="alert" className="text-sm text-postal-ink">
@@ -580,7 +409,7 @@ function RequestBody({
 
       <Section title="What you can do here" hint="Who may act depends on who you are and on the clock; the contract checks both.">
         <div className="flex flex-col gap-4">
-          {isProvider && req.status === "open" && phase === "reply" && req.repliesLeft > 0 && (
+          {replyForm && (
             <div>
               <h3 className="text-[14px]">Reply as the provider</h3>
               <p className="mt-0.5 text-[13px] text-ink-3">The network reads your reply against the rule in this same transaction. A stall sends the fee back at once.</p>
@@ -615,28 +444,19 @@ function RequestBody({
               </div>
             </div>
           )}
-          {req.status === "open" && phase === "lapse" && (
-            <p className="text-sm text-ink-2">The reply window has closed. Anyone may lapse the request: the button is at the top of this thread.</p>
-          )}
-          {memPhase === "due" && memberStatus === "cancelled" && (
-            <p className="text-sm text-ink-2">The honoured period is over. Anyone may collect its fee for the provider: the button is at the top of this thread.</p>
-          )}
-          {req.status === "open" && phase === "reply" && !isProvider && (
+          {!replyForm && (
             <p className="text-sm text-ink-2">
-              {isMember ? "Nothing to do but wait: only the provider may reply." : "Only the provider may reply."} If the window closes in {span(req.deadline - clock)} without an
-              honoured or stalled reply, anyone may lapse it and the fee goes back to the member.
-            </p>
-          )}
-          {memberStatus === "cancelled" && memPhase === "cancelled" && (
-            <p className="text-sm text-ink-2">Honoured. The fee stays held until the period ends in {span(memEnd - clock)}; then anyone may collect it for the provider.</p>
-          )}
-          {(memberStatus === "refunded" || memberStatus === "served") && (
-            <p className="text-sm text-ink-2">
-              Closed. Nothing is left to do on this thread.{" "}
-              <Link href={`/plan/${req.plan}`} className="link">
-                Back to {req.planName}
-              </Link>
-              .
+              {wait.lines?.need}
+              {wait.action ? " The button is in the panel at the top of this thread." : ""}
+              {closed && (
+                <>
+                  {" "}
+                  <Link href={`/plan/${req.plan}`} className="link">
+                    Back to {req.planName}
+                  </Link>
+                  .
+                </>
+              )}
             </p>
           )}
         </div>
